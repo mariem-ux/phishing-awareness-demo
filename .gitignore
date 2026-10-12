@@ -1,0 +1,16 @@
+# Dependencies (huge folder, never upload)
+node_modules/
+
+# Build output (can be generated again)
+dist/
+
+# Environment variables (NEVER upload, contains secrets!)
+.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
