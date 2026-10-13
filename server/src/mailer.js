@@ -32,8 +32,6 @@ function getTransporter() {
     return transporter;
   }
 
-  }
-
   const host = process.env.SMTP_HOST;
   if (host) {
     transporter = nodemailer.createTransport({
@@ -56,7 +54,7 @@ function getTransporter() {
     buffer: true,
   });
   return transporter;
-
+}
 
 async function sendViewOnceEmail({ to, fullName, viewUrl, lang }) {
   const fr = (lang || "en").toLowerCase().startsWith("fr");
