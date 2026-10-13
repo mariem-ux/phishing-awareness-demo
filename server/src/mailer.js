@@ -18,10 +18,20 @@ function getTransporter() {
 
   if (gmailUser && gmailPass) {
     transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: gmailUser, pass: gmailPass },
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: gmailUser,
+        pass: gmailPass,
+      },
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 30000,
     });
     return transporter;
+  }
+
   }
 
   const host = process.env.SMTP_HOST;
@@ -46,7 +56,7 @@ function getTransporter() {
     buffer: true,
   });
   return transporter;
-}
+
 
 async function sendViewOnceEmail({ to, fullName, viewUrl, lang }) {
   const fr = (lang || "en").toLowerCase().startsWith("fr");
