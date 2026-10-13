@@ -2,7 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 const LoginEvent = require("./models/LoginEvent");
-const { sendViewOnceEmail } = require("./mailer");
+const { sendViewOnceEmail, formatSmtpError } = require("./mailer");
 
 const router = express.Router();
 
@@ -60,7 +60,9 @@ router.post("/auth/register", async (req, res) => {
       }
     } catch (err) {
       mailOk = false;
-      console.error("[mail] failed:", err.message);
+      // Log structured SMTP fields so TCP timeout vs greeting vs auth can be
+      // distinguished. formatSmtpError never includes credentials or tokens.
+      console.error("[mail] failed:", JSON.stringify(formatSmtpError(err)));
     }
 
     return res.status(201).json({

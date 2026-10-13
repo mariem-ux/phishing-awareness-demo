@@ -30,9 +30,18 @@ async function main() {
   console.log(
     `[mail] mode=${gmailConfigured ? "gmail:" + (process.env.GMAIL_USER || process.env.EMAIL_USER) : process.env.SMTP_HOST ? "smtp:" + process.env.SMTP_HOST : "console-dev"} fromName=${process.env.MAIL_FROM_NAME || "(none)"}`
   );
+  // Prove the EFFECTIVE transport (host/port/TLS), not just env presence.
+  // Guarded so a mailer problem can never block server startup.
+  try {
+    const { getMailDebugInfo } = require("./mailer");
+    const mi = getMailDebugInfo();
+    console.log(`[mail] effective host=${mi.host} port=${mi.port} secure=${mi.secure} mode=${mi.mode}`);
+  } catch (err) {
+    console.error("[mail] debug-info failed:", err.message);
+  }
   const app = express();
   app.set("trust proxy", true);
-  app.use(cors({ origin: (process.env.FRONT_URL || "http://localhost:5173").split(","), credentials: false }));
+  app.use(cors({ origin: (process.env.FRONT_URL || "http://localhost:5173").split(","), credentials: true }));
   app.use(express.json({ limit: "256kb" }));
 
   app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));

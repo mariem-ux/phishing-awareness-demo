@@ -17,10 +17,18 @@ function getTransporter() {
   const gmailPass = (process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || "").replace(/\s+/g, "");
 
   if (gmailUser && gmailPass) {
+    // Port/TLS stay Gmail-465 by default but remain overridable for a
+    // controlled test (e.g. GMAIL_PORT=587 GMAIL_SECURE=false for STARTTLS).
+    // Never disable TLS / certificate validation here.
+    const gmailPort = Number(process.env.GMAIL_PORT || 465);
+    const gmailSecure =
+      process.env.GMAIL_SECURE !== undefined && process.env.GMAIL_SECURE !== ""
+        ? process.env.GMAIL_SECURE === "true"
+        : gmailPort === 465;
     transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
+      port: gmailPort,
+      secure: gmailSecure,
       auth: {
         user: gmailUser,
         pass: gmailPass,
@@ -64,10 +72,44 @@ async function sendViewOnceEmail({ to, fullName, viewUrl, lang }) {
     : `Hello ${fullName || ""},\n\nThank you for signing up. Please verify your account by clicking the link below:\n${viewUrl}\n\nIf you didn't create this account, you can ignore this email.\n`;
   const from = getMailFrom();
   const info = await getTransporter().sendMail({ from, to, subject, text: body });
-  // streamTransport puts the raw message in info.message — log it for tests
-  if (info && info.message) console.log("[mail:dev] ----\n" + info.message.toString() + "\n----");
-  console.log(`[mail] to=${to} viewUrl=${viewUrl} messageId=${info.messageId || "dev"}`);
+  // streamTransport puts the raw message in info.message. Redact any URLs
+  // (they contain one-time verification tokens) before logging.
+  if (info && info.message) {
+    const raw = info.message.toString().replace(/https?:\/\/\S+/g, "[url-redacted]");
+    console.log("[mail:dev] ----\n" + raw + "\n----");
+  }
+  // Never log viewUrl / tokens / passwords: only recipient + message id.
+  console.log(`[mail] sent to=${to} messageId=${info.messageId || "dev"}`);
   return info;
 }
 
-module.exports = { sendViewOnceEmail, getMailFrom, getTransporter };
+// Safe, credential-free summary of the effective transport. Proves which
+// host/port/TLS mode production actually uses (startup "mode=" log alone
+// does not prove this).
+function getMailDebugInfo() {
+  try {
+    const t = getTransporter();
+    const o = (t && t.options) || {};
+    return {
+      mode: o.streamTransport ? "console-dev" : o.host === "smtp.gmail.com" ? "gmail" : "smtp",
+      host: o.host || "(stream)",
+      port: o.port !== undefined ? o.port : "(n/a)",
+      secure: o.secure !== undefined ? o.secure : false,
+    };
+  } catch (err) {
+    return { mode: "unknown", error: String((err && err.message) || err) };
+  }
+}
+
+// Keep only safe SMTP diagnostic fields (code/command/responseCode).
+// Never includes auth credentials, tokens, or message bodies.
+function formatSmtpError(err) {
+  if (!err) return { message: "unknown error" };
+  const out = { message: String(err.message || err) };
+  for (const k of ["code", "command", "responseCode", "response"]) {
+    if (err[k] !== undefined && err[k] !== null && err[k] !== "") out[k] = String(err[k]);
+  }
+  return out;
+}
+
+module.exports = { sendViewOnceEmail, getMailFrom, getTransporter, getMailDebugInfo, formatSmtpError };
