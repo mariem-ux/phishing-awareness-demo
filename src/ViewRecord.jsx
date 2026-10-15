@@ -63,17 +63,32 @@ function browserName(ua = "") {
 
 function osName(clientMeta, serverUA, hints) {
   // Best source first: structured client hints (real OS version), then UA fallback.
+  // NOTE: the classic UA string is frozen — Windows 10 AND 11 both report
+  // "Windows NT 10.0", so the UA alone can never say "Windows 11".
+  // Chromium on HTTPS/localhost exposes the real version via
+  // userAgentData.getHighEntropyValues("platformVersion"):
+  // major >= 13 means Windows 11, below that means Windows 10.
+  const archOf = (h) => {
+    const a = h?.architecture || (h?.bitness ? `${h.bitness}-bit` : "");
+    return a ? ` (${a})` : "";
+  };
   if (hints?.platform) {
+    const plat = String(hints.platform);
+    if (/windows/i.test(plat)) {
+      const major = parseInt(String(hints.platformVersion || "").split(".")[0], 10);
+      if (!Number.isNaN(major)) return major >= 13 ? `Windows 11${archOf(hints)}` : `Windows 10${archOf(hints)}`;
+      return `Windows 10 / 11${archOf(hints)}`;
+    }
     const ver = hints.platformVersion ? ` ${hints.platformVersion}` : "";
-    const arch = hints.architecture || (hints.bitness ? `${hints.bitness}-bit` : "");
-    return `${hints.platform}${ver}${arch ? ` (${arch})` : ""}`;
+    return `${plat}${ver}${archOf(hints)}`;
   }
   const platform = clientMeta?.platform || "";
   const ua = clientMeta?.userAgent || serverUA || "";
   const s = `${platform} ${ua}`;
   if (/Android/i.test(s)) return "Android";
   if (/iPhone|iPad|iPod/i.test(s)) return "iOS";
-  if (/Windows/i.test(s)) return /Win64|x64/i.test(s) ? "Windows (64-bit)" : "Windows";
+  // Frozen UA: "Windows NT 10.0" = Windows 10 OR 11 — say so honestly.
+  if (/Windows/i.test(s)) return /Win64|x64/i.test(s) ? "Windows 10 / 11 (64-bit)" : "Windows 10 / 11";
   if (/Macintosh|Mac OS/i.test(s)) return "macOS";
   if (/Linux/i.test(s)) return "Linux";
   return platform || null;
@@ -123,8 +138,13 @@ function windowText(cm) {
   const w = cm?.viewport?.w;
   const h = cm?.viewport?.h;
   if (!w || !h) return null;
-  const dpr = cm.viewport.dpr ? `, zoom ${Math.round(cm.viewport.dpr * 100)}%` : "";
-  return `${w} × ${h}px${dpr}`;
+  // FIX: devicePixelRatio is NOT the browser zoom level. On Windows with
+  // 125%/150% display scaling, DPR is 1.25/1.5 even at 100% browser zoom,
+  // so labeling it "zoom 125%" was wrong. It is the combined effect of
+  // OS display scaling × browser zoom. Label it honestly.
+  const dpr = cm.viewport.dpr;
+  const ratio = typeof dpr === "number" && dpr > 0 ? `, pixel ratio ${Math.round(dpr * 100) / 100}` : "";
+  return `${w} × ${h}px${ratio}`;
 }
 
 function perfText(hw, uiLang) {
@@ -136,9 +156,14 @@ function perfText(hw, uiLang) {
 }
 
 function networkText(net) {
+  // FIX: navigator.connection exists only in Chromium. Firefox/Safari leave
+  // every field undefined, so there is genuinely nothing to show — and the
+  // numbers that DO exist are coarse estimates (downlink is often capped,
+  // rtt is rounded). Show what exists, label it an estimate, and never invent.
   if (!net) return null;
   const parts = [];
-  if (net.effectiveType) parts.push(String(net.effectiveType).toUpperCase());
+  if (net.effectiveType) parts.push(`${String(net.effectiveType).toUpperCase()} (estimate)`);
+  if (net.connType) parts.push(String(net.connType));
   if (typeof net.downlinkMbps === "number" && net.downlinkMbps > 0) parts.push(`≈ ${net.downlinkMbps} Mbps`);
   if (typeof net.rttMs === "number" && net.rttMs >= 0) parts.push(`~${net.rttMs} ms`);
   return parts.length ? parts.join(" · ") : null;
@@ -305,7 +330,7 @@ export default function ViewRecord({ token, lang, onClose }) {
       </div>
       <div className="register-body">
         <h1 style={{ fontSize: "2rem", fontWeight: 800, marginBottom: "4px", marginTop: 0 }}>Opps you&apos;re hacked by Securinets</h1>
-        <p className="sub" style={{ marginTop: 0 }}>Digital Footprint Report — professional security audit (educational demo)</p>
+        <p className="sub" style={{ marginTop: 0 }}>Digital Footprint Report :  professional security audit (educational demo)</p>
         {error && !deleted && <p className="error api">{error}</p>}
         {(deleted || error) && (
           <div>
@@ -375,7 +400,7 @@ export default function ViewRecord({ token, lang, onClose }) {
                 cm.vendor && { label: "Vendor", value: cm.vendor },
                 langName(cm.language, uiLang) && { label: fr ? "Langue" : "Language", value: langName(cm.language, uiLang) },
                 langList(cm.languages, uiLang) && cm.languages?.length > 1 && { label: fr ? "Autres langues" : "Other languages", value: langList(cm.languages, uiLang) },
-                networkText(cm.network) && { label: fr ? "Connexion" : "Connection", value: networkText(cm.network) },
+                networkText(cm.network) || (fr ? "Non exposée par ce navigateur (ex. Firefox/Safari masquent cette API)" : "Not exposed by this browser (e.g. Firefox/Safari hide this API)") && { label: fr ? "Connexion" : "Connection", value: networkText(cm.network) },
                 typeof cm.network?.saveData === "boolean" && { label: "Data saver", value: cm.network.saveData ? "On" : "Off" },
                 typeof cm.online === "boolean" && { label: "Online", value: cm.online ? (fr ? "Oui" : "Yes") : "No" },
                 refHost && { label: fr ? "Venu de" : "Came from", value: refHost },

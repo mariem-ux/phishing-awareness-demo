@@ -56,7 +56,7 @@ export const STRINGS = {
     "view.section.location": "Location (only if you allowed it)",
     "view.close": "Close",
     "view.lessonTitle": " Lesson: Think before you click.",
-    "view.lessonBody": "This was an educational simulation. Nothing was saved, nothing was shared, and this page self-destructs when you close it.\n\nBut ask yourself: if this had been a real phishing site, would you have noticed? Phishing is one of the most common cyberattacks in the world. Attackers send emails that look legitimate — from your bank, your school, or a company you trust — and trick you into clicking a link and entering your personal information.\n\nAlways check the sender's email address, hover over links before clicking, and never enter your password on a site you don't fully trust.\n\nStay safe out there. 🔒",
+    "view.lessonBody": "This was an educational simulation. Nothing was saved, nothing was shared, and this page self-destructs when you close it.\n\nBut ask yourself: if this had been a real phishing site, would you have noticed? Phishing is one of the most common cyberattacks in the world. Attackers send emails that look legitimate , from your bank, your school, or a company you trust , and trick you into clicking a link and entering your personal information.\n\nAlways check the sender's email address, hover over links before clicking, and never enter your password on a site you don't fully trust.\n\nStay safe out there.",
     "err.email": "Enter a valid email address.",
     "err.emailRequired": "Email address is required.",
     "err.name": "Full name is required (letters only, 2+ characters).",
