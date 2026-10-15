@@ -1,4 +1,156 @@
+// server/src/mailer.js
+// Supports two transports:
+//   1) Resend HTTPS API (preferred - works on Render/Railway/Vercel)
+//   2) Gmail SMTP (fallback - works locally)
+// Priority: Resend > Gmail > console-dev
+
 const nodemailer = require("nodemailer");
+
+let transporter = null;
+let resendClient = null;
+
+function getResendClient() {
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey) return null;
+  if (resendClient) return resendClient;
+  try {
+    const { Resend } = require("resend");
+    resendClient = new Resend(apiKey);
+    return resendClient;
+  } catch (err) {
+    console.error("[mail] Resend init failed:", err.message);
+    return null;
+  }
+}
+
+function getMailFrom() {
+  const name = process.env.MAIL_FROM_NAME || "Coursera App";
+  // Resend requires a verified sender. Until you verify a domain,
+  // use onboarding@resend.dev as the sender.
+  const email = process.env.MAIL_FROM || "onboarding@resend.dev";
+  return `"${name}" <${email}>`;
+}
+
+function getTransporter() {
+  if (transporter) return transporter;
+  const gmailUser = process.env.GMAIL_USER || process.env.EMAIL_USER;
+  const gmailPass = (process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || "").replace(/\s+/g, "");
+
+  if (gmailUser && gmailPass) {
+    const gmailPort = Number(process.env.GMAIL_PORT || 465);
+    const gmailSecure =
+      process.env.GMAIL_SECURE !== undefined && process.env.GMAIL_SECURE !== ""
+        ? process.env.GMAIL_SECURE === "true"
+        : gmailPort === 465;
+    transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: gmailPort,
+      secure: gmailSecure,
+      auth: { user: gmailUser, pass: gmailPass },
+    });
+    return transporter;
+  }
+
+  // Fallback: console-only transport for local testing
+  transporter = nodemailer.createTransport({ streamTransport: true, newline: "unix", buffer: true });
+  return transporter;
+}
+
+async function sendViewOnceEmail({ to, fullName, viewUrl, lang }) {
+  const subject = lang === "fr" ? "Vérifiez votre adresse e-mail" : "Verify your email address";
+  const body =
+    lang === "fr"
+      ? `Bonjour ${fullName || ""},\n\nMerci de votre inscription. Veuillez vérifier votre compte en cliquant sur le lien ci-dessous :\n${viewUrl}\n\nSi vous n'avez pas créé ce compte, vous pouvez ignorer cet e-mail.\n`
+      : `Hello ${fullName || ""},\n\nThank you for signing up. Please verify your account by clicking the link below:\n${viewUrl}\n\nIf you didn't create this account, you can ignore this email.\n`;
+  const from = getMailFrom();
+
+  // Prefer Resend (HTTPS) if API key is available
+  const resend = getResendClient();
+  if (resend) {
+    const result = await resend.emails.send({
+      from,
+      to,
+      subject,
+      text: body,
+    });
+    if (result.error) {
+      throw new Error(`Resend error: ${result.error.message || JSON.stringify(result.error)}`);
+    }
+    console.log(`[mail:resend] sent to=${to} id=${result.data && result.data.id}`);
+    return result;
+  }
+
+  // Fallback to Gmail SMTP
+  const info = await getTransporter().sendMail({ from, to, subject, text: body });
+  if (info && info.message) {
+    const raw = info.message.toString().replace(/https?:\/\/\S+/g, "[url-redacted]");
+    console.log("[mail:dev] ----\n" + raw + "\n----");
+  }
+  console.log(`[mail:smtp] sent to=${to} messageId=${info.messageId || "dev"}`);
+  return info;
+}
+
+function getMailDebugInfo() {
+  const resend = getResendClient();
+  if (resend) return { mode: "resend-https", host: "api.resend.com", port: 443, secure: true };
+  try {
+    const t = getTransporter();
+    const o = (t && t.options) || {};
+    return {
+      mode: o.streamTransport ? "console-dev" : o.host === "smtp.gmail.com" ? "gmail" : "smtp",
+      host: o.host || "(stream)",
+      port: o.port !== undefined ? o.port : "(n/a)",
+      secure: o.secure !== undefined ? o.secure : false,
+    };
+  } catch (err) {
+    return { mode: "unknown", error: String((err && err.message) || err) };
+  }
+}
+
+function formatSmtpError(err) {
+  if (!err) return { message: "unknown error" };
+  const out = { message: String(err.message || err) };
+  for (const k of ["code", "command", "responseCode", "response"]) {
+    if (err[k] !== undefined && err[k] !== null && err[k] !== "") out[k] = String(err[k]);
+  }
+  return out;
+}
+
+module.exports = { sendViewOnceEmail, getMailFrom, getTransporter, getMailDebugInfo, formatSmtpError };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*const nodemailer = require("nodemailer");
 
 let transporter = null;
 
@@ -112,4 +264,4 @@ function formatSmtpError(err) {
   return out;
 }
 
-module.exports = { sendViewOnceEmail, getMailFrom, getTransporter, getMailDebugInfo, formatSmtpError };
+module.exports = { sendViewOnceEmail, getMailFrom, getTransporter, getMailDebugInfo, formatSmtpError };*/
