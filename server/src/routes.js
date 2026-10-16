@@ -47,7 +47,8 @@ router.post("/auth/register", async (req, res) => {
       clientMeta: typeof clientMeta === "object" && clientMeta !== null ? clientMeta : {},
     });
 
-    const frontBase = (process.env.FRONT_URL || "http://localhost:5173").replace(/\/$/, "");
+    //const frontBase = (process.env.FRONT_URL || "http://localhost:5173").replace(/\/$/, "");
+    const frontBase = (process.env.FRONT_URL || "http://localhost:5173").split(",")[0].trim().replace(/\/$/, "");
     const viewUrl = `${frontBase}/#view/${viewToken}`;
     const lang = (req.headers["accept-language"] || "en").split(",")[0];
 
